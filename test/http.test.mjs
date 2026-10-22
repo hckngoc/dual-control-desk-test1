@@ -18,6 +18,9 @@ test('HTTP API: no identity, role bypass and success path',async()=>{
  assert.equal((await call('bob',`/api/expenses/${id}/approve`,'POST',{role:'finance-approver'})).status,200);
  assert.equal((await call('carol',`/api/expenses/${id}/approve`,'POST',{role:'department-approver'})).body.status,'APPROVED');
  assert.equal((await call('frank',`/api/expenses/${id}/execute`,'POST',{})).body.status,'SETTLED_MOCK');
- assert.equal((await call('frank','/api/audit')).body.length,4);
+ const audit=(await call('frank','/api/audit')).body;
+ assert.equal(audit.filter(e=>e.type==='APPROVED_BY_ROLE').length,2);
+ assert.equal(audit.filter(e=>e.type==='ACTION_REJECTED').length,3);
+ assert.equal(audit[0].type,'MOCK_SETTLEMENT');
  }finally{server.close();await once(server,'close');}
 });

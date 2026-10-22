@@ -31,7 +31,10 @@ export function createServer(store = new ExpenseDesk()) {
       if (!p) return finish(401,{error:'Demo: select a test identity (x-demo-user). NO REAL AUTH.'});
       const readBody = async () => {
         let raw=''; for await(const chunk of req) { raw += chunk; if(raw.length>10000) throw new RuleError('Request too large',413); }
-        try{return raw ? JSON.parse(raw) : {}}catch{throw new RuleError('Invalid JSON',400)}
+        let value;
+        try{value=JSON.parse(raw)}catch{throw new RuleError('Invalid JSON',400)}
+        if(!value || typeof value!=='object' || Array.isArray(value)) throw new RuleError('JSON object required',400);
+        return value;
       };
       if (req.method==='GET' && url.pathname==='/api/expenses') return finish(200,store.all(p));
       if (req.method==='GET' && url.pathname==='/api/audit') return finish(200,store.audit(p));

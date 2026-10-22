@@ -1,88 +1,80 @@
-# TIDE SETUP — triển khai với TideCloak thật
+# TideCloak thật — cấu hình ứng dụng hiện có
 
-## Tình trạng gói
+**RMIT Hackathon 2026 — Challenge 2 · RMIT_SGS_N3T_C2**
 
-Gói này gồm business engine đã kiểm thử, simulator và **overlay** Next.js cho template chính thức. Không có Tide server, không có realm đã cấp phép và không có `data/tidecloak.json` thật. Không được xem simulator là tích hợp TideCloak. Template phải tải trên máy có kết nối Internet. Ứng dụng local demo chỉ dùng dữ liệu giả.
+## 1. Chạy source/test/build ngay, không tạo realm
 
-## 0. Chuẩn bị
+Repo đã có `app/`. Không chạy lại `scripts/setup-tide.sh`: script chỉ dùng lịch sử scaffold và từ chối ghi đè app hiện tại.
 
-- macOS/Linux, Node.js >=20, npm, Docker Desktop, curl, tar, git.
-- Quyết định triển khai **local Docker** hay **Skycloak** trước khi tạo realm. Hướng dẫn bên dưới là local Docker; các realm không thể tự di chuyển giữa hai lựa chọn.
-- Tự đọc https://tide.org/legal, cung cấp **email thật do chủ realm quản lý**, và chủ realm **đồng ý rõ ràng**; không được lấy một email giả hoặc đồng ý thay ai.
-- Nếu realm đã tồn tại, không khởi tạo trùng; làm theo Tide Agent Pack `start-tidecloak-dev`/`add-auth-nextjs-existing` và kiểm tra adapter hiện hữu.
+Windows PowerShell, Node.js 22.18+ và npm:
 
-## 1. Kiểm thử business logic trước
-
-```bash
-npm test             # kỳ vọng tất cả unit + HTTP tests thành công
-npm run demo         # trang mô phỏng: http://localhost:4173
-```
-
-## 2. Khởi tạo mã từ template chính thức (không tạo realm)
-
-```bash
-bash scripts/setup-tide.sh
+```powershell
+# root
+npm test
+npm run check
+npm run demo
+# terminal khác, root
 cd app
-npm install
-cp .env.example .env
-```
-
-Các file `src/lib/auth/*`, `src/app/providers.tsx`, `src/app/auth/redirect/page.tsx`, `next.config.ts`, `public/tide_dpop_auth.html`, `scripts/init-tidecloak.sh` được giữ từ template Tide. Không thay thế chúng bằng code mock. `scripts/setup-tide.sh` từ chối ghi đè `app/` đã tồn tại.
-
-## 3. Cấu hình bí mật và giấy phép
-
-Mở `app/.env`, đặt `KC_BOOTSTRAP_ADMIN_PASSWORD` bằng giá trị mạnh do bạn chọn, `TIDE_LICENSE_EMAIL` bằng **email thật của bạn**, và `TIDE_TERMS_ACCEPTED=yes` **chỉ khi bạn đích thân đã đồng ý**. Không commit `.env`, token hay `data/tidecloak.json`. Nếu các mục này đã tồn tại từ phiên trước, không cần hỏi/điền lại.
-
-Đảm bảo Docker daemon chạy:
-
-```bash
-docker info
-docker run --rm hello-world
-```
-
-Sau đó:
-
-```bash
-cd app                 # nếu đang ở root dự án
-npm run init
-```
-
-Tide bootstrap tự khởi tạo container/realm, licensing/IGA, first admin, account linking và adapter theo bản script chính thức. Khi script in invite link, **người sở hữu tài khoản phải tự mở link và hoàn tất thao tác**. Nếu script báo lỗi, dùng Tide Agent Pack `tide_doctor` và playbook phù hợp; không bỏ qua bước Tide authentication để chạy app.
-
-Kiểm tra `app/data/tidecloak.json` được tạo, bao gồm trường `jwk.keys`; không đăng file này lên GitHub. Kiểm tra `docker ps`, `http://localhost:8080`, phiên đăng nhập thực.
-
-## 4. Khởi chạy app tích hợp
-
-```bash
-cd app
+npm ci
+npm test
+npm run build
+npm run typecheck
 npm run dev
 ```
 
-Mở `http://localhost:3000/expenses` (không phải `/` của simulator). Đăng nhập bằng Tide thật. `src/app/api/*` sử dụng `withAuth` của template; trình duyệt gọi `secureFetch` với DPoP, không gửi header `x-demo-user`.
+Simulator: http://localhost:4173 (identity giả, không có Tide). App thật: http://localhost:3000/expenses.
 
-Chạy doctor từ root repository khi app đang chạy:
+Không cần cài Docker/WSL/jq để kiểm thử source hoặc build. Thiếu adapter không còn gây import lỗi: trang hiển thị hướng dẫn cấu hình, /api/config trả 503; API được bảo vệ vẫn yêu cầu JWT + DPoP. Build thành công **không** có nghĩa Tide login/MultiAdmin đã được kiểm chứng.
 
-```bash
-bash .tide-pack/templates/shared/tide-doctor.sh --app app --url http://localhost:3000
-```
+## 2. Có realm TideCloak sẵn — đường ưu tiên
 
-Nếu doctor của phiên bản pack không nhận `--app`, hãy `cd app` và chạy `bash ../.tide-pack/templates/shared/tide-doctor.sh --url http://localhost:3000`. Quan trọng nhất là kết quả kiểm tra JWT, DPoP, 401/403 và quyền thực, không chỉ giao diện.
+Không chạy init, không tạo realm trùng, không xóa container/database.
 
-## 5. Thêm vai trò và tài khoản
+1. Trong đúng realm ứng dụng, xác định public client và bật DPoP-bound access tokens.
+2. Xuất **Tide adapter** qua chức năng export của realm/client với IGA đã cấu hình (provider `keycloak-oidc-keycloak-json`). Không dùng JSON OIDC thông thường thiếu phần mở rộng Tide.
+3. Lưu bản thật ở `app/data/tidecloak.json` (Git bỏ qua). Hoặc đặt toàn bộ JSON vào biến **server-only** `CLIENT_ADAPTER`; với Next có thể dùng `app/.env.local`, một dòng và quote đúng cú pháp dotenv. Không đặt `NEXT_PUBLIC_`, không dán adapter lên GitHub.
+4. Kiểm tra adapter có `realm`, `auth-server-url`, `resource`, `public-client: true`, `jwk.keys` công khai không rỗng, `vendorId` và `homeOrkUrl`. URL ngoài localhost phải HTTPS. Không chứa credentials hoặc private JWK.
+5. Client redirect/web origins phải tương ứng http://localhost:3000; cho phép /auth/redirect, /silent-check-sso.html và các URL ứng dụng như cấu hình client phù hợp. Access token phải có audience bằng resource/client ID (self audience mapper có trong realm template).
+6. Chạy `npm run dev` trong app, mở /expenses, đăng nhập và kiểm tra /api/whoami hiển thị đúng subject/realm roles.
 
-Trong TideCloak Admin Console của realm **dual-control-desk** (không phải realm `master`), tạo bốn realm roles:
+SDK thực tế khóa trong lockfile: @tidecloak/nextjs 0.14.17, @tidecloak/react 0.14.33, @tidecloak/js 0.14.41. Wrapper Next nhận prop `config`, không chuyển tiếp `configUrl`; Providers fetch /api/config rồi truyền object ổn định với `useDPoP: { mode: 'strict', alg: 'ES256' }`. Không import adapter vào bundle lúc build.
 
-- `requester`: tạo khoản chi
-- `finance-approver`: ký duyệt Finance
-- `department-approver`: ký duyệt Department
-- `treasury-executor`: thực hiện mock settlement
+Mỗi lần đổi biến môi trường hãy restart app; khi realm đổi signing keys, xuất lại adapter. Trường hợp lỗi cấu hình sẽ fail closed, không mock đăng nhập.
 
-Tạo tối thiểu 4 tài khoản người dùng Tide khác nhau, gán 4 vai trò tương ứng bằng TideCloak Admin Console và đăng nhập lại để có JWT mới. Việc tạo role và gán role trên realm bật IGA tạo các **change requests**; cần phê duyệt/commit thông qua giao diện quản trị trước khi quyền có hiệu lực. Không bật đường tắt admin trong API ứng dụng.
+## 3. Realm mới — chỉ operator có quyền quyết định
 
-**MultiAdmin demonstration là bước không được bỏ qua:** Liên kết ít nhất **hai** admin Tide khác nhau; kiểm tra IGA `tide` (không phải `simple`/Tideless), chuyển sang governance có yêu cầu nhiều admin theo hướng dẫn Tide, và kiểm tra ngưỡng thực tế >=2. Không tự giả định 2-of-3 được cấu hình tự động. Admin thứ nhất thử gán `finance-approver` cho chính mình; trạng thái phải `PENDING`, không phát sinh quyền trong token mới. Admin thứ hai phê duyệt bằng Tide enclave qua native Admin Console; chỉ sau đủ quorum/commit mới có quyền. Nếu `POST .../approve` trả `mode=needs-approval`, phải hoàn thành enclave signing và gọi lại `/approve`; không tính là approved ngay sau phản hồi đầu tiên.
+Đây là bước độc lập, **không phải prerequisite cho sửa source**. Không thực thi trong đợt hardening này.
 
-API IGA chuẩn là `/admin/realms/<realm>/iga/change-requests?status=PENDING`, duyệt `POST /.../{id}/approve`; không dùng API cũ `/tide-admin/change-set/*`. Không lưu admin token vào server ứng dụng. Hãy thử hành động ở **realm này**; master realm có thể được miễn IGA, vì vậy thử tại master không chứng minh an toàn.
+Operator cần môi trường Linux/WSL có Docker daemon, Bash, curl, jq và các tiện ích script đang dùng (sudo, lsof); Node/npm chạy được trong môi trường đã chọn. Repo không tự cài hay sửa Docker/WSL.
 
-## 6. Giới hạn bảo mật / minh bạch demo
+Đọc `app/scripts/init-tidecloak.sh` trước. Script bootstrap:
+- Yêu cầu mật khẩu admin riêng qua .env, email license thật và người sở hữu tự đọc/đồng ý https://tide.org/legal.
+- Yêu cầu operator chủ động đặt `TIDE_BOOTSTRAP_FRESH=yes`.
+- Từ chối nếu đã có container tên tidecloak, adapter hoặc database keycloakdb; không tự dừng/xóa/ghi đè state cũ.
+- Tạo container và realm, license/IGA, account linking, xuất adapter; có thể cấp admin và commit thay đổi lúc bootstrap.
 
-MVP sử dụng expense store in-memory trong tiến trình Next.js: mất khi restart, không dùng multi-instance hoặc chạy production. Một người kiểm soát application server/DB có thể sửa tình trạng khoản chi, vì per-expense approvals chưa được Tide ký bằng cryptographic policy. Đừng tuyên bố đã ngăn mọi kiểu override đối với dữ liệu kế toán. Hãy nhấn mạnh **Tide bảo vệ thông tin định danh, role attestation và governed role changes**; nghiệp vụ duyệt và mock settlement là phần app minh họa. Nếu muốn bảo vệ không thể sửa đổi từng lệnh thanh toán thì cần thiết kế Tide policy-governed signing/Forseti được Tide team triển khai/test, ngoài phạm vi MVP tự dựng này.
+Chỉ sau khi tự quyết định các điều trên, operator mới chạy `npm run init` từ app với biến opt-in đó. Invite/account-linking phải do chủ tài khoản tự hoàn thành. Không nhờ agent chấp nhận terms, dùng email giả hoặc tự xóa state để tiếp tục. Nếu bootstrap lỗi giữa chừng, giữ dữ liệu và chẩn đoán; không rerun init để reset.
+
+## 4. Realm roles và bốn người dùng độc lập
+
+Tạo bốn **realm roles**: requester, finance-approver, department-approver, treasury-executor. Cấp qua quy trình quản trị có thẩm quyền; người dùng đăng nhập lại để nhận token mới.
+
+Một khoản >= $10,000 cần requester, Finance, Department và treasury với các subject độc lập theo luật app. Dưới ngưỡng chỉ cần Finance, treasury vẫn riêng. UI chỉ hỗ trợ thao tác; quyết định quyền nằm ở server với token đã xác minh.
+
+## 5. Kiểm chứng IGA / MultiAdmin riêng
+
+Đăng nhập thành công không chứng minh governance. Kiểm tra đúng realm (không phải master), IGA bật, attestor/governance thực sự Tide-backed, mode không còn firstAdmin/simple, threshold thực tế >=2 và ít nhất hai admin độc lập.
+
+1. Admin A yêu cầu gán role approver cho mình.
+2. Ghi nhận change request ID/status và việc một admin không thể làm grant có hiệu lực.
+3. Fresh token chưa có role, API vẫn từ chối.
+4. Admin B độc lập hoàn thành phê duyệt bằng Tide enclave; thu đủ threshold và commit.
+5. Fresh verified token sau đó chứa role, và API chấp nhận thao tác đúng quyền.
+
+Quan sát trạng thái thực trong console. Phản hồi cần thêm enclave approval không phải đã approve/commit. Không tự giả định bootstrap cấu hình threshold >=2. Nếu không có môi trường này, đánh dấu **BLOCKED**, không đóng giả thành video thực.
+
+## 6. Proxy và giới hạn
+
+Mặc định không tin x-forwarded-host/proto trong DPoP. Chỉ bật `TRUST_PROXY_HEADERS=true` khi một proxy do nhóm kiểm soát thay thế các header đó; cần xác minh URL công khai khớp htu.
+
+Chạy một tiến trình Next cho demo. Expense/audit/replay nằm trong RAM, mất khi restart, không dùng multi-instance. Audit không bất biến, không chuyển tiền thật. [Security](SECURITY.md) và [test plan](TEST_PLAN_VI.md) mô tả giới hạn và bằng chứng cần thu thập.

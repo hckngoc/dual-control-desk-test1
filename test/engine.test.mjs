@@ -22,7 +22,34 @@ test('one time only execute',()=>{const d=new ExpenseDesk(),e=d.create(requester
 test('no unauthorized requester',()=>{const d=new ExpenseDesk();bad(()=>d.create(finance,{title:'Servers',amount:20000}));});
 test('no unauthorized approver',()=>{const d=new ExpenseDesk(),e=d.create(requester,{title:'Services',amount:200});bad(()=>d.approve(otherRequester,e.id,'finance-approver'));});
 test('no unauthorized executor',()=>{const d=new ExpenseDesk(),e=d.create(requester,{title:'Services',amount:200});d.approve(finance,e.id,'finance-approver');bad(()=>d.execute(finance,e.id));});
-test('invalid amounts blocked',()=>{const d=new ExpenseDesk();for(const amount of [0,-1,NaN,'abc',1.001,1000001]) bad(()=>d.create(requester,{title:'Invalid amount',amount}));});
+test('invalid amounts blocked',()=>{const d=new ExpenseDesk();for(const amount of [0,1e-10,-1,NaN,'abc',1.001,1000001]) bad(()=>d.create(requester,{title:'Invalid amount',amount}));});
 test('unknown expense returns 404',()=>{const d=new ExpenseDesk();assert.throws(()=>d.approve(finance,'EXP-9999','finance-approver'),e=>e.status===404);});
 test('no app role mutation',()=>{const d=new ExpenseDesk();bad(()=>d.attemptRoleChange({id:'erin',roles:['realm-admin']}));});
-test('audit trail records steps',()=>{const d=new ExpenseDesk(),e=d.create(requester,{title:'Services',amount:200});d.approve(finance,e.id,'finance-approver');assert.deepEqual(d.audit(requester).map(x=>x.type),['APPROVED_BY_ROLE','CREATED']);});
+test('audit trail records steps',()=>{const d=new ExpenseDesk(),e=d.create(requester,{title:'Services',amount:200});d.approve(finance,e.id,'finance-approver');assert.deepEqual(d.audit(requester).map(x=>x.type),['APPROVED_BY_ROLE','APPROVAL_ATTEMPT','CREATED']);});
+
+test('strict input types reject coercion without creating expenses',()=>{
+ const d=new ExpenseDesk();
+ for(const data of [null,[],true,'request',{}, {title:123,amount:10}, {title:['abc'],amount:10},
+   ...[true,'12.00',[12],{},null,Infinity].map(amount=>({title:'Invalid types',amount}))]) {
+   assert.throws(()=>d.create(requester,data),e=>e.status===400);
+ }
+ assert.equal(d.all(requester).length,0);
+ assert.ok(d.audit(requester).every(e=>e.type==='ACTION_REJECTED'));
+ assert.equal(d.create(requester,{title:'Valid after failures',amount:0.01}).id,'EXP-0001');
+});
+test('rejected approval is audited and leaves state unchanged',()=>{
+ const d=new ExpenseDesk(),e=d.create(self,{title:'Self approval',amount:12000});
+ const before=structuredClone(e);
+ assert.throws(()=>d.approve(self,e.id,'finance-approver'),e=>e.status===403);
+ assert.deepEqual(e,before);
+ assert.deepEqual(d.audit(self).slice(0,2).map(e=>e.type),['ACTION_REJECTED','APPROVAL_ATTEMPT']);
+ assert.throws(()=>d.approve(finance,e.id,null),e=>e.status===400);
+});
+test('executor must be separate even when holding treasury role',()=>{
+ const d=new ExpenseDesk(),e=d.create(requester,{title:'Services',amount:100});
+ d.approve(finance,e.id,'finance-approver');
+ for(const id of ['alice','bob']) assert.throws(()=>d.execute({id,roles:['treasury-executor']},e.id),e=>e.status===403);
+ assert.equal(e.status,'APPROVED');
+ d.execute(executor,e.id);
+ assert.throws(()=>d.execute(executor,e.id),e=>e.status===409);
+});

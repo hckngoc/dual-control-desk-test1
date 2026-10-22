@@ -1,18 +1,32 @@
-# 2-minute demo video — script and shots (English)
+# Two-minute demo — RMIT_SGS_N3T_C2
 
-Record `demo.mp4` locally and commit it to the public GitHub repo before submission. Avoid credentials, emails, tokens, or private admin UI data in screenshots. Use only synthetic examples.
+**Artifact status: INCOMPLETE. No demo.mp4 exists yet.** Record actual application behavior and add the real file to the repository before submission.
 
-| Time | Screen | Spoken script |
-|---|---|---|
-| 0:00–0:15 | Title + $25,000 expense | "Meet Dual-Control Expense Desk. High-value decisions deserve independent approvals, but traditional systems often let one administrator redefine who has authority." |
-| 0:15–0:35 | App architecture mini diagram | "Employees submit expenses. Finance and Department review them independently. TideCloak handles real identities and makes approver-role changes governed rather than unilateral." |
-| 0:35–0:55 | Create expense as requester; try self-approve and execute | "This request needs two distinct sign-offs. The requester is blocked from self-approval, and settlement is blocked until both roles have acted." |
-| 0:55–1:15 | Finance approval; pending; Department approval; then mock execute | "Two separate approved users act. The expense becomes ready, then our treasury role records a mock settlement. No real payment moves." |
-| 1:15–1:43 | **REAL TideCloak console**: admin attempts to grant themselves Finance role; remains pending; second admin approves through enclave | "But the important problem is one layer deeper: who controls the approvers? Here a single admin cannot make their own role grant effective. Tide MultiAdmin governance requires an independent authorized approval before the role takes effect." |
-| 1:43–2:00 | Diagram + final banner | "TideCloak protects identity and governance. Our expense engine illustrates separation of duties. Together, they make high-value collaboration possible without trusting one administrator to control every decision." |
+| Time | Screen and narration |
+|---|---|
+| 0:00–0:15 | Title: “Dual-Control Expense Desk, RMIT_SGS_N3T_C2, RMIT Hackathon 2026 — Challenge 2. Two spending approvals mean little if one administrator controls who can approve.” |
+| 0:15–0:30 | Expense Desk, signed-in identity and roles: “TideCloak authenticates users. Our app enforces distinct approval roles and an independent treasury executor.” |
+| 0:30–0:47 | Requester submits a synthetic $12,000 cloud contract: “This needs Finance and Department approval. The request starts pending.” |
+| 0:47–1:00 | Show a forbidden/self-approval attempt and unchanged state/audit. If UI prevents the action, state that explicitly; use a prepared real authenticated API request to show the server rejection. Do not call a disabled button server evidence. “This user cannot approve their own expense.” |
+| 1:00–1:24 | Finance user approves, still pending; different Department user approves; treasury user mock settles: “Independent subjects complete the quorum. Treasury records a mock settlement. No real funds move.” |
+| 1:24–1:48 | **Only when verified:** actual application-realm console, role grant pending after one admin, independent enclave approval, threshold/commit, then fresh token role and authorized action: “Approval authority itself is governed.” |
+| 1:48–2:00 | Return to product and team identity: “Identity governance and expense policy address different trust boundaries. This prototype makes those boundaries visible.” |
 
-**If the actual Tide MultiAdmin admin-grant test is NOT verified, do not show the 1:15–1:43 outcome as fact.** Replace with a transparent 'in progress' status; do not submit it as a working governance demo.
+If Tide login is unavailable, label every simulator shot **OFFLINE SIMULATOR — NO REAL TIDE AUTH** and say that real integration remains blocked. If MultiAdmin is unverified, replace that segment with an honest “MultiAdmin verification outstanding” statement. Such a recording still leaves the integration acceptance criterion incomplete. Never fabricate a pending grant or imply isolated signing fixtures are live Tide evidence.
 
-### Recording
+## Prepare the recording
 
-On Mac: press Shift + Command + 5 → Record Entire Screen/Selected Portion; or use OBS. Add voiceover. Trim to <=120s. Export H.264 MP4, verify video plays, and name it `demo.mp4`. Keep any Tide user email or admin credentials out of recording.
+- Use the committed app revision and synthetic expense data. Warm up the real login flow.
+- Prepare requester, Finance, Department and treasury in separate browser profiles/sessions so identities are visible and no session is confused.
+- For self-approval evidence, the requester must also hold Finance through a legitimately approved role grant. For wrong-role evidence, use a requester-only subject. Prepare the direct call through the installed SDK's secureFetch in a controlled test harness; do not send an arbitrary username or plain Bearer token. A 401 caused by a missing proof is not a self-approval 403.
+- Keep the HTTP status, unchanged expense and ACTION_REJECTED audit event visible for a real business-policy rejection.
+- Confirm the real application realm, Tide-backed IGA, >=2 threshold, independent admins and actual pending/approved/committed state before making governance claims.
+- Close terminals/notifications containing passwords, adapter JSON, email addresses, tokens or private admin information.
+
+## Capture and export
+
+Use an existing trusted screen recorder available to the team; no recording software was installed by this task. On Windows, the operator can use their existing screen-recording tool and microphone. Select the app window and readable resolution, add narration, and trim the result to about 120 seconds.
+
+Export **H.264 video + AAC audio in an MP4 container** named demo.mp4 at the repository root. Play the complete exported file and check that its audio, text and all identity transitions are clear. Compress it below the repository host's ordinary file limit when practical; if using Git LFS, verify judges can retrieve/play the actual video.
+
+Review the real file for secrets, commit it on the agreed feature branch, push it, and confirm it is accessible from the submitted repository. An external link or an empty MP4 does not satisfy the required in-repository video artifact.

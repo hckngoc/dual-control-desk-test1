@@ -6,26 +6,25 @@ import { useEffect, useState } from "react";
 // Playbook: add-rbac-nextjs
 // hasRealmRole() is UI gating only. The API enforces the real check.
 export default function DashboardPage() {
-  const { hasRealmRole, token } = useTideCloak();
+  const { hasRealmRole, authenticated, secureFetch } = useTideCloak();
   const [customers, setCustomers] = useState<any[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!token) return;
-    fetch("/api/customers", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    if (!authenticated) return;
+    secureFetch(new URL("/api/customers", window.location.origin).href)
       .then((res) => {
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
         return res.json();
       })
       .then((data) => setCustomers(data.customers))
       .catch((err) => setError(err.message));
-  }, [token]);
+  }, [authenticated]);
 
   return (
     <div>
       <h1>Dashboard</h1>
+      <a href="/expenses">Open Expense Desk</a>
 
       {/* UI gating: show admin section only if user has role */}
       {/* This does NOT protect the API. Server-side JWT verification does. */}

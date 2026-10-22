@@ -1,7 +1,7 @@
-name: Node policy tests
+name: Policy and Next.js checks
 on:
   push:
-    branches: [main]
+    branches: [main, feat/challenge2-hardening-thinh]
   pull_request:
     branches: [main]
 jobs:
@@ -11,9 +11,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '22.18.0'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
       - run: npm test
-      - name: Check repository for obvious local secrets
-        shell: bash
-        run: |
-          ! git ls-files | grep -E '(^|/)(\.env|tidecloak\.json|keycloakdb)' 
+      - run: npm run check
+      - run: npm ci
+        working-directory: app
+      - run: npm test
+        working-directory: app
+      - run: npm run build
+        working-directory: app
+      - run: npm run typecheck
+        working-directory: app

@@ -2,6 +2,9 @@ import path from "path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [{ source: "/", destination: "/expenses", permanent: false }];
+  },
   // Next.js 16+ defaults to Turbopack. Use `next dev --webpack` (in package.json)
   // because @tidecloak/* packages need the webpack workarounds below.
   webpack: (config) => {

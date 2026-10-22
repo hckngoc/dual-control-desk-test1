@@ -1,16 +1,14 @@
-import { loadTideConfig } from "@/lib/auth/tidecloakConfig";
-
-// Serve adapter JSON for server-side use (e.g. JWT verification).
-// The client-side SDK now imports the adapter JSON directly via TideCloakProvider's config prop.
-// This route remains available for any server-side consumers that need the config.
+import { loadTideConfig, TideConfigError } from "@/lib/auth/tidecloakConfig";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+// Public connection settings and public verification keys only.
 export async function GET() {
   try {
-    const config = loadTideConfig();
-    return Response.json(config);
+    return Response.json(loadTideConfig(), { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     return Response.json(
-      { error: err instanceof Error ? err.message : "Config not found" },
-      { status: 500 }
+      { error: err instanceof TideConfigError ? err.message : "TideCloak configuration unavailable" },
+      { status: 503, headers: { "Cache-Control": "no-store" } }
     );
   }
 }

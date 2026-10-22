@@ -10,3 +10,10 @@ data/tidecloak.json
 **/data/keycloakdb*
 .DS_Store
 *.log
+*.tsbuildinfo
+.test-build/
+**/scripts/.skycloak-api-key
+*.pem
+*.key
+**/data/*.db
+**/data/*.db.*

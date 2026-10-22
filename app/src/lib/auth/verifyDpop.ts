@@ -1,37 +1,4 @@
-/**
- * RFC 9449 DPoP proof verification for a Tide resource server.
- *
- * WHY THIS EXISTS
- * ---------------
- * `useDPoP: { mode: 'strict' }` makes TideCloak issue sender-constrained tokens: the access token
- * carries `cnf.jkt`, the thumbprint of a key the browser holds, and `secureFetch` sends a signed
- * `DPoP` proof alongside it.
- *
- * **None of that protects anything unless the RESOURCE SERVER verifies the proof.** If your API
- * only checks the JWT signature, a stolen token replays as a plain `Bearer` and succeeds — the
- * binding is decorative. That was measured live: a bare-Bearer replay of a bound token returned
- * `200` (LEARNINGS-nightfabric-001 L-01).
- *
- * An earlier pack revision claimed `secureFetch` sends "a Tide-specific format, not standard
- * RFC 9449 compact JWS" and told you to skip this. That is false. Measured against
- * `@tidecloak/js@0.14.20` (`lib/tidecloak-dpop.js`, `generateDPoPProof`), the proof is an ordinary
- * compact JWS:
- *
- *     header  { alg, typ: "dpop+jwt", jwk: { crv, kty, x, y } }
- *     payload { jti, htm, htu, iat, ath?, nonce? }
- *
- * The likely cause of that report's `Invalid Compact JWS` was verifying with the REALM's public key
- * instead of the `jwk` embedded in the proof's own header. A DPoP proof is signed by the client's
- * ephemeral key — it is self-describing, and that is the point.
- *
- * USAGE
- * -----
- *   const claims = await verifyTideJWT(token);          // your existing signature/iss/azp check
- *   await verifyDpop(req, token, claims);               // throws if the binding does not hold
- *
- * Both are required. Neither replaces the other.
- */
-
+/** RFC 9449 resource-server checks. Verify the access JWT before calling verifyDpop. */
 import { jwtVerify, importJWK, calculateJwkThumbprint, decodeProtectedHeader, type JWK } from "jose";
 
 export class DpopError extends Error {
@@ -41,7 +8,7 @@ export class DpopError extends Error {
   }
 }
 
-/** Replace with Redis/Postgres for multi-instance deployments — see "Replay" below. */
+/** Replace with a shared store before using multiple server processes. */
 export interface JtiStore {
   /** true if this jti has NOT been seen before (and records it). */
   claim(jti: string, expiresAtMs: number): Promise<boolean>;
@@ -83,7 +50,7 @@ export class MemoryJtiStore implements JtiStore {
  */
 export function requestHtu(
   req: { url: string; headers: { get(name: string): string | null } },
-  trustForwardedHeaders = true,
+  trustForwardedHeaders = false,
 ): string {
   const url = new URL(req.url);
   if (trustForwardedHeaders) {
@@ -134,8 +101,7 @@ export async function verifyDpop(
     );
   }
 
-  // The scheme matters. This is the exact replay that succeeded when only the signature was checked:
-  // a bound token presented as `Bearer` must be rejected, or the binding buys nothing.
+  // A sender-constrained token must use the DPoP authorization scheme.
   const authz = req.headers.get("authorization") ?? "";
   if (!/^DPoP /i.test(authz)) {
     throw new DpopError(
@@ -156,13 +122,15 @@ export async function verifyDpop(
   if (header.typ !== "dpop+jwt") throw new DpopError(`DPoP proof typ is '${header.typ}', expected 'dpop+jwt'.`);
   const jwk = header.jwk as JWK | undefined;
   if (!jwk) throw new DpopError("DPoP proof header has no embedded jwk.");
+  if (header.alg !== "ES256" || jwk.kty !== "EC" || jwk.crv !== "P-256" || "d" in jwk || "k" in jwk) {
+    throw new DpopError("DPoP requires an ES256 public P-256 key, matching the strict browser configuration.");
+  }
 
-  // Verify with the key the proof carries — NOT the realm key. This is the step the older,
-  // withdrawn guidance got wrong, and the reason it concluded the format was non-standard.
+  // Verify with the browser key embedded in the proof, not the realm signing key.
   let payload: Record<string, unknown>;
   try {
     const key = await importJWK(jwk, header.alg);
-    ({ payload } = (await jwtVerify(proof, key)) as { payload: Record<string, unknown> });
+    ({ payload } = (await jwtVerify(proof, key, { algorithms: ["ES256"], typ: "dpop+jwt" })) as { payload: Record<string, unknown> });
   } catch (e) {
     throw new DpopError(`DPoP proof signature invalid: ${e instanceof Error ? e.message : String(e)}`);
   }
@@ -180,11 +148,11 @@ export async function verifyDpop(
     throw new DpopError("DPoP proof `ath` does not match the presented access token.");
   }
 
-  if (typeof payload.htm !== "string" || payload.htm.toUpperCase() !== req.method.toUpperCase()) {
+  if (typeof payload.htm !== "string" || payload.htm !== req.method) {
     throw new DpopError(`DPoP proof htm '${String(payload.htm)}' does not match ${req.method}.`);
   }
 
-  const htu = requestHtu(req, opts.trustForwardedHeaders ?? true);
+  const htu = requestHtu(req, opts.trustForwardedHeaders ?? false);
   if (payload.htu !== htu) {
     throw new DpopError(
       `DPoP proof htu '${String(payload.htu)}' does not match '${htu}'. Behind a proxy this is ` +
@@ -201,7 +169,8 @@ export async function verifyDpop(
   const jti = payload.jti;
   if (typeof jti !== "string" || !jti) throw new DpopError("DPoP proof has no jti.");
   const store = opts.jtiStore ?? defaultStore;
-  if (!(await store.claim(jti, Date.now() + skew * 1000))) {
+  // Retain a future-dated proof until its last valid instant.
+  if (!(await store.claim(`${thumb}:${jti}`, Math.ceil((iat + skew) * 1000)))) {
     throw new DpopError("DPoP proof jti already used — replay.");
   }
 }

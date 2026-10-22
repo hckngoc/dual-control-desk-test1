@@ -191,13 +191,23 @@ for cmd in docker curl jq; do
   fi
 done
 
-# --- Step 1: Clean previous state ---
-echo "==> Cleaning previous state..."
-docker stop tidecloak 2>/dev/null || true
-docker rm tidecloak 2>/dev/null || true
+# --- Step 1: Refuse existing state; bootstrap is for a fresh environment only ---
+if docker container inspect tidecloak >/dev/null 2>&1; then
+  echo "ERROR: A tidecloak container already exists. This script will not stop or replace it."
+  echo "Use the existing realm and export its public-client adapter; see docs/TIDE_SETUP_VI.md."
+  exit 1
+fi
+if [ -f "$PROJECT_DIR/data/tidecloak.json" ] || compgen -G "$PROJECT_DIR/data/keycloakdb*" >/dev/null; then
+  echo "ERROR: Local Tide state already exists. Preserve it and use the existing realm."
+  exit 1
+fi
+if [ "${TIDE_BOOTSTRAP_FRESH:-}" != "yes" ]; then
+  echo "ERROR: Fresh bootstrap creates a container, realm, licensing and account-linking state."
+  echo "Only the operator may opt in with TIDE_BOOTSTRAP_FRESH=yes after reviewing this script."
+  exit 1
+fi
 mkdir -p "$PROJECT_DIR/data"
-sudo rm -f "$PROJECT_DIR/data/keycloakdb"* 2>/dev/null || true
-sudo chown -R 1000:1000 "$PROJECT_DIR/data"
+sudo chown 1000:1000 "$PROJECT_DIR/data"
 
 if lsof -i :8080 >/dev/null 2>&1; then
   echo "ERROR: Port 8080 is already in use."
@@ -268,7 +278,7 @@ rm -f "$TMP_REALM"
 
 if [[ ! "$REALM_STATUS" =~ ^2 ]]; then
   echo "ERROR: Realm import failed (HTTP $REALM_STATUS). Cannot continue."
-  echo "If the realm already exists, delete it first or wipe the DB: sudo rm -f ./data/keycloakdb*"
+  echo "If the realm already exists, preserve it and export its adapter. Do not wipe the DB."
   exit 1
 fi
 echo "    Realm created."

@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --import ./test/register.mjs --test test/*.test.mjs",
     "start": "next start",
     "init": "bash scripts/init-tidecloak.sh"
   },

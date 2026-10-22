@@ -1,5 +1,5 @@
 import { withAuth } from '@/lib/auth/protect';
-import { actor, desk, asResponse } from '@/lib/expense/store';
+import { actor, desk, asResponse, readObject } from '@/lib/expense/store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -9,7 +9,7 @@ export const GET = withAuth(async (_req, jwt) => {
 });
 export const POST = withAuth(async (req, jwt) => {
   try {
-    const payload = await req.json();
+    const payload = await readObject(req);
     return Response.json(desk.create(actor(jwt), payload), { status:201 });
   } catch (e) { return asResponse(e); }
 });

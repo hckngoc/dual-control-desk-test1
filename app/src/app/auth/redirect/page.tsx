@@ -12,7 +12,8 @@ import { useEffect, useState } from "react";
 function RedirectHandler() {
   const { isProcessing, isSuccess, error } = useAuthCallback({
     onSuccess: (returnUrl) => {
-      window.location.assign(returnUrl || "/");
+      const target = new URL(returnUrl || "/expenses", window.location.origin);
+      window.location.assign(target.origin === window.location.origin ? target.href : "/expenses");
     },
     onError: () => {
       window.location.assign("/");

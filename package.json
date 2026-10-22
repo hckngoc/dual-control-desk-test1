@@ -7,6 +7,7 @@
   "scripts": {
     "demo": "node demo/server.mjs",
     "test": "node --test test/*.test.mjs",
+    "check": "node scripts/check-repository.mjs",
     "start": "npm run demo"
   },
   "engines": { "node": ">=20" }
