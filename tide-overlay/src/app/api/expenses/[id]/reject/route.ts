@@ -1,0 +1,39 @@
+import { withAuth } from '@/lib/auth/protect';
+import { hasRole } from '@/lib/auth/tideJWT';
+import { actor, desk, asResponse } from '@/lib/expense/store';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+const expenseId = (req: Request) => {
+  const match = new URL(req.url).pathname.match(/^\/api\/expenses\/(EXP-\d+)\/reject$/);
+  if (!match) throw new Error('Invalid expense reject route');
+  return match[1];
+};
+
+export const POST = withAuth(async (req, jwt) => {
+  try {
+    const body = await req.json();
+    const role = String(body?.role || '').trim();
+    const reason = String(body?.reason || '').trim();
+
+    if (role !== 'finance-approver' && role !== 'department-approver') {
+      return Response.json(
+        { error: "Invalid checker role specified. Must be 'finance-approver' or 'department-approver'" },
+        { status: 400 }
+      );
+    }
+
+    // Critical Rule 4: Verify role claim on verified JWT
+    if (!hasRole(jwt, role)) {
+      return Response.json(
+        { error: `Forbidden: Verified '${role}' role claim required to review and reject this request` },
+        { status: 403 }
+      );
+    }
+
+    return Response.json(desk.reject(actor(jwt), expenseId(req), role, reason));
+  } catch (e) {
+    return asResponse(e);
+  }
+});

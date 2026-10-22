@@ -34,3 +34,18 @@ export function withRole(role: string, handler: AuthHandler) {
     return handler(req, jwt);
   });
 }
+
+export function withAnyRole(roles: string[], handler: AuthHandler) {
+  return withAuth(async (req, jwt) => {
+    const realmRoles = (jwt.realm_access as any)?.roles || [];
+    const hasMatch = roles.some((r) => realmRoles.includes(r) || hasRole(jwt, r));
+    if (!hasMatch) {
+      return Response.json(
+        { error: `Forbidden: Verified role claim required (one of: ${roles.join(', ')})` },
+        { status: 403 }
+      );
+    }
+    return handler(req, jwt);
+  });
+}
+

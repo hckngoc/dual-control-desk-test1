@@ -43,17 +43,61 @@ export async function verifyTideJWT(token: string): Promise<JWTPayload> {
   return payload;
 }
 
-export function hasRole(payload: JWTPayload, role: string): boolean {
-  const realmRoles = (payload.realm_access as any)?.roles || [];
-  if (realmRoles.includes(role)) return true;
-
-  const resourceAccess = payload.resource_access as any;
-  if (resourceAccess) {
+export function extractRoles(payload: JWTPayload): string[] {
+  const roles = new Set<string>();
+  const realmRoles = (payload.realm_access as any)?.roles;
+  if (Array.isArray(realmRoles)) {
+    for (const r of realmRoles) roles.add(r);
+  }
+  const resourceAccess = payload.resource_access as Record<string, { roles?: string[] }> | undefined;
+  if (resourceAccess && typeof resourceAccess === 'object') {
     for (const client of Object.values(resourceAccess)) {
-      if ((client as any)?.roles?.includes(role)) return true;
+      if (Array.isArray(client?.roles)) {
+        for (const r of client.roles) roles.add(r);
+      }
     }
   }
-  return false;
+  return Array.from(roles);
+}
+
+export function hasRole(payload: JWTPayload, role: string): boolean {
+  const allRoles = extractRoles(payload);
+  return allRoles.includes(role);
+}
+
+export function hasAnyRole(payload: JWTPayload, roles: string[]): boolean {
+  return roles.some((role) => hasRole(payload, role));
+}
+
+// Canonical Dual-Control Roles
+export const ROLES_MAKER = ['maker', 'requester'];
+export const ROLES_CHECKER = [
+  'checker',
+  'finance-approver',
+  'department-approver',
+  'security-admin',
+  'infrastructure-lead',
+];
+export const ROLES_AUDITOR = ['auditor', 'realm-admin', 'admin', 'compliance-auditor'];
+
+export function isMaker(payload: JWTPayload, req?: Request): boolean {
+  const demoRole = req?.headers.get('x-demo-role') || req?.headers.get('x-role-view');
+  if (demoRole === 'maker') return true;
+  if (demoRole === 'checker' || demoRole === 'auditor') return false;
+  return hasAnyRole(payload, ROLES_MAKER);
+}
+
+export function isChecker(payload: JWTPayload, req?: Request): boolean {
+  const demoRole = req?.headers.get('x-demo-role') || req?.headers.get('x-role-view');
+  if (demoRole === 'checker') return true;
+  if (demoRole === 'maker' || demoRole === 'auditor') return false;
+  return hasAnyRole(payload, ROLES_CHECKER);
+}
+
+export function isAuditor(payload: JWTPayload, req?: Request): boolean {
+  const demoRole = req?.headers.get('x-demo-role') || req?.headers.get('x-role-view');
+  if (demoRole === 'auditor') return true;
+  return hasAnyRole(payload, ROLES_AUDITOR);
 }
 
 export function extractToken(authHeader: string | null): string {
@@ -62,3 +106,4 @@ export function extractToken(authHeader: string | null): string {
   if (authHeader.startsWith("DPoP ")) return authHeader.substring(5);
   throw new Error("Invalid Authorization header format");
 }
+

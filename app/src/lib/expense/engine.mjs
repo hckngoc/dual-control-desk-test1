@@ -13,6 +13,7 @@ export class RuleError extends Error {
 }
 
 const clean = (x) => String(x ?? '').trim();
+
 export class ExpenseDesk {
   constructor() { this.expenses = []; this.events = []; this.sequence = 0; }
   identity(principal) {
@@ -33,6 +34,10 @@ export class ExpenseDesk {
     const p = this.requireRole(principal, ROLE_REQUESTER);
     const title = clean(data?.title);
     const amount = Number(data?.amount);
+    const category = clean(data?.category) || 'General Operations';
+    const vendor = clean(data?.vendor) || 'Authorized Vendor';
+    const justification = clean(data?.justification) || '';
+
     if (title.length < 3 || title.length > 120) throw new RuleError('Title must contain 3–120 characters', 400);
     if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000 || Math.abs(Math.round(amount * 100) - amount * 100) > 1e-7) {
       throw new RuleError('Amount must be USD 0.01–1,000,000.00 with max two decimals', 400);
@@ -40,10 +45,12 @@ export class ExpenseDesk {
     const amountCents = Math.round(amount * 100);
     const expense = {
       id: `EXP-${String(++this.sequence).padStart(4,'0')}`, title, amountCents,
+      category, vendor, justification,
       submittedBy: p.id, submittedByName: p.name,
       createdAt: new Date().toISOString(), status: 'PENDING', approvals: [],
       required: amountCents >= THRESHOLD_CENTS ? [ROLE_FINANCE, ROLE_DEPARTMENT] : [ROLE_FINANCE],
       settlementReference: null,
+      rejection: null,
     };
     this.expenses.unshift(expense);
     this.event('CREATED', p.id, expense.id, `${title}: $${(amountCents / 100).toFixed(2)}`);
@@ -63,6 +70,17 @@ export class ExpenseDesk {
     e.approvals.push({ role, userId: p.id, name: p.name, at: new Date().toISOString() });
     e.status = e.required.every(r => e.approvals.some(a => a.role === r)) ? 'APPROVED' : 'PENDING';
     this.event('APPROVED_BY_ROLE', p.id, id, role);
+    return e;
+  }
+  reject(principal, id, role, reason = '') {
+    const p = this.requireRole(principal, role);
+    const e = this.one(id);
+    if (e.status !== 'PENDING') throw new RuleError('Expense is not pending', 409);
+    if (!e.required.includes(role)) throw new RuleError('This approver role is not required to review this request', 400);
+    if (e.submittedBy === p.id) throw new RuleError('Requester cannot review or reject their own request (Separation of Duties)', 403);
+    e.status = 'REJECTED';
+    e.rejection = { role, userId: p.id, name: p.name, reason: clean(reason) || 'Rejected by checker', at: new Date().toISOString() };
+    this.event('REJECTED_BY_ROLE', p.id, id, `${role}: ${e.rejection.reason}`);
     return e;
   }
   execute(principal, id) {

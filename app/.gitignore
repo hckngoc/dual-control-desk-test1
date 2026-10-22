@@ -2,6 +2,7 @@ node_modules/
 .next/
 out/
 build/
+*.tsbuildinfo
 
 # Secrets — operator credentials NEVER belong in the repo (AP-41).
 .env
