@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.tide-pack/
+tide-app/
+.env
+.env.*
+!.env.example
+data/tidecloak.json
+**/data/tidecloak.json
+**/data/keycloakdb*
+.DS_Store
+*.log

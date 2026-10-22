@@ -1,0 +1,13 @@
+{
+  "name": "dual-control-desk-hackathon",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Dual Control Expense Desk business demo and TideCloak integration overlay",
+  "scripts": {
+    "demo": "node demo/server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "start": "npm run demo"
+  },
+  "engines": { "node": ">=20" }
+}
